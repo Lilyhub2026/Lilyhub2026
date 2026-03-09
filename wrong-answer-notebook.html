@@ -552,6 +552,7 @@ textarea{resize:vertical;min-height:65px;line-height:1.6;}
 // ============ SUPABASE CONFIG ============
 const SB_URL = 'https://jimvbnkywjqoullidjov.supabase.co';
 const SB_KEY = 'sb_publishable_KjvZdvdQ7C9VbuSfJPbpcA_H7tNsS3n';
+const CLAUDE_KEY = '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';
 
 async function sbFetch(path, opts={}){
   const res = await fetch(SB_URL + path, {
@@ -767,7 +768,7 @@ function showPhotoForm(){
       </div>
     </div>
     <div class="fgrid">
-      <div class="fg"><label>📚 科目</label><select id="fS"><option value="math">🔢 数学</option><option value="chinese">📖 语文</option><option value="english">🔤 英语</option></select></div>
+      <div class="fg"><label>📚 科目</label><select id="fS"><option value="math">🔢 数学</option><option value="chinese" selected>📖 语文</option><option value="english">🔤 英语</option></select></div>
       <div class="fg"><label>📅 日期</label><input type="date" id="fD" value="${today()}"></div>
       <div class="fg"><label>❌ 错误答案</label><textarea id="fW" placeholder="我当时写的答案..." rows="2"></textarea></div>
       <div class="fg"><label>✅ 正确答案</label><textarea id="fC" placeholder="正确答案是..." rows="2"></textarea></div>
@@ -951,10 +952,17 @@ function setMain(html){document.getElementById('mainContent').className='main';d
 // ============ AI CALLS ============
 async function apiCall(content,maxT=1200){
   const resp=await fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',headers:{'Content-Type':'application/json'},
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key': CLAUDE_KEY,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
     body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:maxT,messages:[{role:'user',content}]})
   });
   const d=await resp.json();
+  if(d.error){throw new Error(d.error.message);}
   return d.content?.map(c=>c.text||'').join('')||'';
 }
 
