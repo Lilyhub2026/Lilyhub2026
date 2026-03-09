@@ -422,9 +422,13 @@ textarea{resize:vertical;min-height:65px;line-height:1.6;}
     <span class="login-icon">📖</span>
     <h2>我的错题收集本</h2>
     <p>输入家庭码，手机电脑数据自动同步</p>
-    <input class="login-input" id="familyCodeInput" type="text" placeholder="输入家庭码" maxlength="20"
+    <input class="login-input" id="familyCodeInput" type="text" placeholder="家庭码（自定义，如 lily2026）" maxlength="20"
+      onkeydown="if(event.key==='Enter')document.getElementById('apiKeyInput').focus()">
+    <div class="login-hint">家庭码由你自己设定，手机和电脑输入相同的码即可同步数据</div>
+    <input class="login-input" id="apiKeyInput" type="password" placeholder="Claude API Key（sk-ant-...）"
+      style="margin-top:12px;letter-spacing:1px;"
       onkeydown="if(event.key==='Enter')doLogin()">
-    <div class="login-hint">家庭码由你自己设定，手机和电脑输入相同的码即可同步数据<br>首次使用会自动创建，请妥善记住</div>
+    <div class="login-hint">API Key 仅保存在本机浏览器，不会上传到任何服务器 🔒<br>获取地址：console.anthropic.com/settings/keys</div>
     <button class="login-btn" id="loginBtn" onclick="doLogin()">🚀 进入错题本</button>
   </div>
 </div>
@@ -552,7 +556,7 @@ textarea{resize:vertical;min-height:65px;line-height:1.6;}
 // ============ SUPABASE CONFIG ============
 const SB_URL = 'https://jimvbnkywjqoullidjov.supabase.co';
 const SB_KEY = 'sb_publishable_KjvZdvdQ7C9VbuSfJPbpcA_H7tNsS3n';
-const CLAUDE_KEY = 'sk-ant-api03-8qOMfpHOm_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';
+let CLAUDE_KEY = localStorage.getItem('wab_ak') || '';
 
 async function sbFetch(path, opts={}){
   const res = await fetch(SB_URL + path, {
@@ -607,9 +611,13 @@ const SC={math:'#ff6b6b',chinese:'#6bcb77',english:'#a29bfe'};
 // ============ LOGIN ============
 function doLogin(){
   const code = document.getElementById('familyCodeInput').value.trim();
+  const ak = document.getElementById('apiKeyInput').value.trim();
   if(!code){ alert('请输入家庭码！'); return; }
+  if(!ak || !ak.startsWith('sk-ant-')){ alert('请输入正确的 Claude API Key（以 sk-ant- 开头）'); return; }
   familyCode = code;
+  CLAUDE_KEY = ak;
   localStorage.setItem('wab_fc', code);
+  localStorage.setItem('wab_ak', ak);
   document.getElementById('loginBtn').disabled = true;
   document.getElementById('loginBtn').textContent = '⏳ 加载中...';
   document.getElementById('loginScreen').style.display='none';
@@ -618,14 +626,18 @@ function doLogin(){
 function doLogout(){
   if(!confirm('切换家庭码将退出当前账户，确定吗？')) return;
   localStorage.removeItem('wab_fc');
+  localStorage.removeItem('wab_ak');
   location.reload();
 }
 
-// Auto login if code saved
-if(familyCode){
+// Auto login if code and key saved
+if(familyCode && CLAUDE_KEY){
   document.getElementById('loginScreen').style.display='none';
   loadAllData();
 } else {
+  // Pre-fill saved values if any
+  if(familyCode) document.getElementById('familyCodeInput').value = familyCode;
+  if(CLAUDE_KEY) document.getElementById('apiKeyInput').value = CLAUDE_KEY;
   document.getElementById('familyCodeInput').focus();
 }
 
