@@ -781,25 +781,57 @@ function handlePhotoUpload(e){const f=e.target.files[0];if(f)processPhoto(f);e.t
 function processPhoto(file){
   const r=new FileReader();
   r.onload=async ev=>{
-    pendingPhoto=ev.target.result;
-    const pp=document.getElementById('ppImg'); if(pp)pp.src=pendingPhoto;
+    // Compress image before processing
+    const compressed = await compressImage(ev.target.result, 1200, 0.82);
+    pendingPhoto=compressed;
+    const pp=document.getElementById('ppImg'); if(pp)pp.src=compressed;
     const pw=document.getElementById('ppWrap'); if(pw)pw.style.display='block';
     const up=document.getElementById('upPrompt'); if(up)up.style.display='none';
     const ob=document.getElementById('ocrBar'); if(ob)ob.style.display='flex';
     const ox=document.getElementById('ocrBox'); if(ox)ox.style.display='none';
-    await runOCR(pendingPhoto);
+    await runOCR(compressed);
   };
   r.readAsDataURL(file);
+}
+
+function compressImage(base64, maxPx=1200, quality=0.82){
+  return new Promise(resolve=>{
+    const img=new Image();
+    img.onload=()=>{
+      let w=img.width, h=img.height;
+      if(w>maxPx||h>maxPx){
+        if(w>h){h=Math.round(h*maxPx/w);w=maxPx;}
+        else{w=Math.round(w*maxPx/h);h=maxPx;}
+      }
+      const canvas=document.createElement('canvas');
+      canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.src=base64;
+  });
 }
 async function runOCR(b64){
   const ob=document.getElementById('ocrBar'),ox=document.getElementById('ocrBox'),ot=document.getElementById('ocrText'),fw=document.getElementById('fW');
   try{
-    const txt=await apiCall([{type:'image',source:{type:'base64',media_type:b64.split(';')[0].split(':')[1]||'image/jpeg',data:b64.split(',')[1]}},{type:'text',text:`识别图片题目，按格式输出（纯文本）：\n【题目】\n内容\n\n【学生答案】\n内容（无则写"无"）`}]);
+    const mime=b64.split(';')[0].split(':')[1]||'image/jpeg';
+    const data=b64.split(',')[1];
+    const txt=await apiCall([
+      {type:'image',source:{type:'base64',media_type:mime,data}},
+      {type:'text',text:`请识别图片中的题目内容，按以下格式输出纯文本：\n【题目】\n（题目原文）\n\n【学生答案】\n（学生写的答案，没有则写"无"）`}
+    ]);
     const qm=txt.match(/【题目】\s*([\s\S]*?)(?=【|$)/),am=txt.match(/【学生答案】\s*([\s\S]*?)$/);
     if(ob)ob.style.display='none'; if(ox)ox.style.display='block';
-    if(ot)ot.value=qm?qm[1].trim():txt;
+    if(ot)ot.value=qm?qm[1].trim():txt.trim();
     if(am&&fw&&am[1].trim()!=='无'&&am[1].trim())fw.value=am[1].trim();
-  }catch{if(ob)ob.style.display='none';if(ox)ox.style.display='block';if(ot)ot.value='识别失败，请手动输入';}
+  }catch(e){
+    console.error('OCR error:',e);
+    if(ob)ob.style.display='none';
+    if(ox)ox.style.display='block';
+    if(ot)ot.value='';
+    toast('⚠️ 识别失败，请手动输入题目内容');
+  }
+}
 }
 async function submitPhoto(){
   const q=(document.getElementById('ocrText')?.value||'').trim()||'（图片题目）';
