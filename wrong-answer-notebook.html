@@ -289,6 +289,129 @@ textarea{resize:vertical;min-height:65px;line-height:1.6;}
 ::-webkit-scrollbar-thumb{background:rgba(162,155,254,.38);border-radius:10px;}
 @keyframes fadeInUp{from{transform:translateX(-50%) translateY(20px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
 @keyframes fall{to{transform:translateY(100vh) rotate(720deg);opacity:0}}
+
+/* ========== MOBILE BOTTOM NAV ========== */
+.mob-nav{display:none;}
+
+/* ========== MOBILE RESPONSIVE ========== */
+@media(max-width:768px){
+  /* Header — compact */
+  header{padding:10px 14px;gap:9px;}
+  .hicon{font-size:1.5rem;}
+  header h1{font-size:1.1rem;}
+  header p{display:none;}
+  .hright .spill{display:none;}
+  .hright{gap:6px;}
+  .hright .hbtn{font-size:.7rem;padding:5px 9px;}
+  /* hide text labels on small header buttons */
+  .hbtn .btn-label{display:none;}
+
+  /* App layout: stack vertically, sidebar becomes hidden panel */
+  .app{flex-direction:column;height:auto;min-height:calc(100vh - 56px);}
+
+  /* Sidebar hidden by default on mobile, toggled via JS */
+  .sidebar{
+    width:100%;
+    max-height:0;
+    overflow:hidden;
+    border-right:none;
+    border-bottom:3px dashed rgba(102,126,234,.18);
+    transition:max-height .35s ease;
+  }
+  .sidebar.mob-open{max-height:70vh;overflow-y:auto;}
+
+  /* Main takes full width */
+  .main{padding:12px;gap:12px;min-height:60vh;}
+  .report-page{padding:12px;gap:12px;}
+
+  /* Forms: single column */
+  .fgrid{grid-template-columns:1fr;}
+  .fg.full{grid-column:1;}
+  .ssrow{grid-template-columns:60px 1fr;}
+  .ssrow select:last-child{grid-column:2;margin-top:4px;}
+
+  /* Detail answer row: stack */
+  .arow{flex-direction:column;}
+
+  /* Report stats: 2x2 grid */
+  .rp-stats{grid-template-columns:1fr 1fr;}
+  .rsc-val{font-size:1.3rem;}
+
+  /* Report charts: single column */
+  .rp-charts{grid-template-columns:1fr;}
+  .rp-topbar{flex-direction:column;align-items:flex-start;gap:9px;}
+  .rp-actions{width:100%;display:flex;flex-wrap:wrap;gap:7px;}
+  .rp-sel{flex:1;min-width:0;}
+  .bgen-report{width:100%;}
+
+  /* Report bottom section: single col */
+  #mainContent > div:last-of-type,
+  .report-page > div[style*="grid-template-columns:1fr 1fr"]{
+    display:flex!important;flex-direction:column!important;gap:12px!important;
+  }
+
+  /* Modal full screen on mobile */
+  .modal{border-radius:20px 20px 0 0;position:fixed;bottom:0;left:0;right:0;width:100%;max-width:100%;max-height:90vh;padding:24px 18px;margin:0;}
+  .modal-overlay{align-items:flex-end;}
+
+  /* Bottom navigation bar */
+  .mob-nav{
+    display:flex;
+    position:fixed;bottom:0;left:0;right:0;
+    background:var(--paper);
+    border-top:2px solid rgba(102,126,234,.12);
+    box-shadow:0 -4px 20px rgba(0,0,0,.08);
+    z-index:200;
+    padding:0;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .mob-nav-btn{
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:3px;padding:9px 4px 8px;border:none;background:transparent;cursor:pointer;
+    font-family:inherit;color:#b2bec3;font-size:.58rem;font-weight:700;transition:all .18s;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .mob-nav-btn .nav-ico{font-size:1.35rem;line-height:1;}
+  .mob-nav-btn.active{color:var(--purple);}
+  .mob-nav-btn.active .nav-ico{transform:scale(1.15);}
+
+  /* Push content above bottom nav */
+  .app,.report-page{padding-bottom:70px;}
+  body{padding-bottom:0;}
+
+  /* Larger tap targets */
+  .star{font-size:1.4rem;padding:4px;}
+  .brev{padding:8px 16px;font-size:.82rem;}
+  .bgen{padding:9px 14px;font-size:.8rem;}
+  input,select,textarea{font-size:16px!important;} /* prevent iOS zoom */
+
+  /* Photo upload area: taller */
+  .pzone{padding:32px 16px;}
+
+  /* Sidebar list items: bigger touch targets */
+  .eitem{padding:13px 14px;}
+  .eititle{font-size:.86rem;}
+  .bdel{font-size:1rem;right:11px;bottom:11px;}
+
+  /* Login card full width */
+  .login-card{width:92vw;padding:32px 22px;}
+  .login-input{font-size:1.1rem;letter-spacing:4px;}
+
+  /* Welcome screen bigger emoji */
+  .wemoji{font-size:5rem;}
+  .welcome h2{font-size:1.8rem;}
+
+  /* Photo thumb full width */
+  .photo-thumb{max-height:240px;}
+
+  /* Report history full width */
+  .rh-list{max-height:none;}
+}
+
+/* iPhone safe area for bottom nav */
+@supports(padding-bottom:env(safe-area-inset-bottom)){
+  .mob-nav{padding-bottom:calc(env(safe-area-inset-bottom) + 2px);}
+}
 </style>
 </head>
 <body>
@@ -405,6 +528,25 @@ textarea{resize:vertical;min-height:65px;line-height:1.6;}
 
 <div class="ctr" id="confettiContainer"></div>
 <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoUpload(event)">
+
+<!-- Mobile Bottom Nav -->
+<nav class="mob-nav" id="mobNav">
+  <button class="mob-nav-btn active" id="mnList" onclick="mobNav('list')">
+    <span class="nav-ico">📂</span>错题
+  </button>
+  <button class="mob-nav-btn" id="mnAdd" onclick="mobNav('add')">
+    <span class="nav-ico">✏️</span>手动
+  </button>
+  <button class="mob-nav-btn" id="mnPhoto" onclick="mobNav('photo')">
+    <span class="nav-ico">📷</span>拍照
+  </button>
+  <button class="mob-nav-btn" id="mnReport" onclick="mobNav('report')">
+    <span class="nav-ico">📊</span>报告
+  </button>
+  <button class="mob-nav-btn" id="mnSettings" onclick="mobNav('settings')">
+    <span class="nav-ico">⚙️</span>设置
+  </button>
+</nav>
 
 <script>
 // ============ SUPABASE CONFIG ============
@@ -1014,6 +1156,44 @@ function renderAIReport(r){
   return `<div class="ai-report-card"><div class="ar-header"><div class="ar-avatar">🤖</div>
     <div><div class="ar-title">AI学情分析报告</div><div class="ar-time">生成时间：${r.date} ${r.time} · ${r.subject==='all'?'全科目':SM[r.subject]} · ${r.scope==='all'?'全部':'近'+r.scope+'天'} · ${r.errorCount}道错题</div></div></div>
     <div class="ar-body">${r.content}</div></div>`;
+}
+
+// ============ MOBILE NAV ============
+function mobNav(tab){
+  // Update active state
+  ['list','add','photo','report','settings'].forEach(t=>{
+    const btn=document.getElementById('mn'+t.charAt(0).toUpperCase()+t.slice(1));
+    if(btn)btn.classList.toggle('active',t===tab);
+  });
+  const sidebar=document.querySelector('.sidebar');
+  if(tab==='list'){
+    // Toggle sidebar panel
+    if(sidebar){sidebar.classList.toggle('mob-open');}
+    // If opening sidebar, close main panels
+    if(sidebar&&sidebar.classList.contains('mob-open')){
+      // keep main as is
+    }
+  } else {
+    // Close sidebar when switching to other tabs
+    if(sidebar)sidebar.classList.remove('mob-open');
+    if(tab==='add'){showAddForm();}
+    else if(tab==='photo'){showPhotoForm();}
+    else if(tab==='report'){showReport();}
+    else if(tab==='settings'){openSettings();}
+  }
+}
+
+// On mobile, tapping a list item should close sidebar
+const _origShowDetail=showDetail;
+async function showDetail(id){
+  const sidebar=document.querySelector('.sidebar');
+  if(sidebar&&window.innerWidth<=768)sidebar.classList.remove('mob-open');
+  await _origShowDetail(id);
+  // Reset nav active to list
+  ['list','add','photo','report','settings'].forEach(t=>{
+    const btn=document.getElementById('mn'+t.charAt(0).toUpperCase()+t.slice(1));
+    if(btn)btn.classList.toggle('active',t==='list');
+  });
 }
 
 // ============ CONFETTI ============
