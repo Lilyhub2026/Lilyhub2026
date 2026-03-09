@@ -425,10 +425,14 @@ textarea{resize:vertical;min-height:65px;line-height:1.6;}
     <input class="login-input" id="familyCodeInput" type="text" placeholder="家庭码（自定义，如 lily2026）" maxlength="20"
       onkeydown="if(event.key==='Enter')document.getElementById('apiKeyInput').focus()">
     <div class="login-hint">家庭码由你自己设定，手机和电脑输入相同的码即可同步数据</div>
-    <input class="login-input" id="apiKeyInput" type="password" placeholder="Claude API Key（sk-ant-...）"
+    <input class="login-input" id="apiKeyInput" type="password" placeholder="Gemini API Key（免费，选填）"
       style="margin-top:12px;letter-spacing:1px;"
       onkeydown="if(event.key==='Enter')doLogin()">
-    <div class="login-hint">API Key 仅保存在本机浏览器，不会上传到任何服务器 🔒<br>获取地址：console.anthropic.com/settings/keys</div>
+    <div class="login-hint">
+      不填也可用，拍照识别完全免费 🆓<br>
+      填写后解锁 AI 分析 + 练习题生成 ✨<br>
+      <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--purple);font-weight:800;">免费获取 Gemini Key →</a>
+    </div>
     <button class="login-btn" id="loginBtn" onclick="doLogin()">🚀 进入错题本</button>
   </div>
 </div>
@@ -556,7 +560,7 @@ textarea{resize:vertical;min-height:65px;line-height:1.6;}
 // ============ SUPABASE CONFIG ============
 const SB_URL = 'https://jimvbnkywjqoullidjov.supabase.co';
 const SB_KEY = 'sb_publishable_KjvZdvdQ7C9VbuSfJPbpcA_H7tNsS3n';
-let CLAUDE_KEY = localStorage.getItem('wab_ak') || '';
+let GEMINI_KEY = localStorage.getItem('wab_gk') || '';
 
 async function sbFetch(path, opts={}){
   const res = await fetch(SB_URL + path, {
@@ -613,11 +617,10 @@ function doLogin(){
   const code = document.getElementById('familyCodeInput').value.trim();
   const ak = document.getElementById('apiKeyInput').value.trim();
   if(!code){ alert('请输入家庭码！'); return; }
-  if(!ak || !ak.startsWith('sk-ant-')){ alert('请输入正确的 Claude API Key（以 sk-ant- 开头）'); return; }
   familyCode = code;
-  CLAUDE_KEY = ak;
+  GEMINI_KEY = ak;
   localStorage.setItem('wab_fc', code);
-  localStorage.setItem('wab_ak', ak);
+  if(ak) localStorage.setItem('wab_gk', ak);
   document.getElementById('loginBtn').disabled = true;
   document.getElementById('loginBtn').textContent = '⏳ 加载中...';
   document.getElementById('loginScreen').style.display='none';
@@ -626,18 +629,16 @@ function doLogin(){
 function doLogout(){
   if(!confirm('切换家庭码将退出当前账户，确定吗？')) return;
   localStorage.removeItem('wab_fc');
-  localStorage.removeItem('wab_ak');
+  localStorage.removeItem('wab_gk');
   location.reload();
 }
 
-// Auto login if code and key saved
-if(familyCode && CLAUDE_KEY){
+// Auto login if family code saved
+if(familyCode){
   document.getElementById('loginScreen').style.display='none';
   loadAllData();
 } else {
-  // Pre-fill saved values if any
-  if(familyCode) document.getElementById('familyCodeInput').value = familyCode;
-  if(CLAUDE_KEY) document.getElementById('apiKeyInput').value = CLAUDE_KEY;
+  if(GEMINI_KEY) document.getElementById('apiKeyInput').value = GEMINI_KEY;
   document.getElementById('familyCodeInput').focus();
 }
 
@@ -825,18 +826,34 @@ function compressImage(base64, maxPx=1200, quality=0.82){
   });
 }
 async function runOCR(b64){
-  const ob=document.getElementById('ocrBar'),ox=document.getElementById('ocrBox'),ot=document.getElementById('ocrText'),fw=document.getElementById('fW');
+  const ob=document.getElementById('ocrBar'),ox=document.getElementById('ocrBox'),ot=document.getElementById('ocrText');
+  if(ob)ob.style.display='flex';
+  if(ox)ox.style.display='none';
   try{
-    const mime=b64.split(';')[0].split(':')[1]||'image/jpeg';
-    const data=b64.split(',')[1];
-    const txt=await apiCall([
-      {type:'image',source:{type:'base64',media_type:mime,data}},
-      {type:'text',text:`请识别图片中的题目内容，按以下格式输出纯文本：\n【题目】\n（题目原文）\n\n【学生答案】\n（学生写的答案，没有则写"无"）`}
-    ]);
-    const qm=txt.match(/【题目】\s*([\s\S]*?)(?=【|$)/),am=txt.match(/【学生答案】\s*([\s\S]*?)$/);
-    if(ob)ob.style.display='none'; if(ox)ox.style.display='block';
-    if(ot)ot.value=qm?qm[1].trim():txt.trim();
-    if(am&&fw&&am[1].trim()!=='无'&&am[1].trim())fw.value=am[1].trim();
+    // Load Tesseract.js if not already loaded
+    if(typeof Tesseract === 'undefined'){
+      await new Promise((res,rej)=>{
+        const s=document.createElement('script');
+        s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+        s.onload=res; s.onerror=rej;
+        document.head.appendChild(s);
+      });
+    }
+    // Update bar text
+    if(ob)ob.innerHTML='<div style="display:flex;align-items:center;gap:8px"><div class="ldots" style="padding:0"><span></span><span></span><span></span></div>正在识别文字，请稍候...</div>';
+
+    const result = await Tesseract.recognize(b64, 'chi_sim+eng', {
+      logger: m => {
+        if(m.status==='recognizing text' && ob){
+          ob.innerHTML=`<div style="display:flex;align-items:center;gap:8px"><div class="ldots" style="padding:0"><span></span><span></span><span></span></div>识别中 ${Math.round(m.progress*100)}%...</div>`;
+        }
+      }
+    });
+
+    const text = result.data.text.trim();
+    if(ob)ob.style.display='none';
+    if(ox)ox.style.display='block';
+    if(ot)ot.value = text || '未能识别文字，请手动输入';
   }catch(e){
     console.error('OCR error:',e);
     if(ob)ob.style.display='none';
@@ -962,24 +979,56 @@ function showWelcome(){
 function setMain(html){document.getElementById('mainContent').className='main';document.getElementById('mainContent').innerHTML=html;}
 
 // ============ AI CALLS ============
-async function apiCall(content,maxT=1200){
-  const resp=await fetch('https://api.anthropic.com/v1/messages',{
+// ============ AI CALLS (Gemini Free) ============
+async function apiCall(content, maxT=1200){
+  // content: string (text only) or array (with image)
+  const model = 'gemini-2.0-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`;
+
+  let parts = [];
+  if(typeof content === 'string'){
+    parts = [{text: content}];
+  } else if(Array.isArray(content)){
+    // Convert Claude-style content array to Gemini format
+    for(const item of content){
+      if(item.type==='text') parts.push({text: item.text});
+      else if(item.type==='image'){
+        const src = item.source;
+        if(src.type==='base64'){
+          parts.push({inlineData:{mimeType: src.media_type, data: src.data}});
+        } else if(src.type==='url'){
+          // Fetch and convert URL image to base64
+          try{
+            const r=await fetch(src.url);
+            const blob=await r.blob();
+            const b64=await new Promise(res=>{const fr=new FileReader();fr.onload=e=>res(e.target.result.split(',')[1]);fr.readAsDataURL(blob);});
+            parts.push({inlineData:{mimeType:blob.type||'image/jpeg',data:b64}});
+          }catch{ /* skip image if fetch fails */ }
+        }
+      }
+    }
+  }
+
+  const resp = await fetch(url, {
     method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'x-api-key': CLAUDE_KEY,
-      'anthropic-version':'2023-06-01',
-      'anthropic-dangerous-direct-browser-access':'true'
-    },
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:maxT,messages:[{role:'user',content}]})
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      contents:[{parts}],
+      generationConfig:{maxOutputTokens: maxT, temperature:0.7}
+    })
   });
-  const d=await resp.json();
-  if(d.error){throw new Error(d.error.message);}
-  return d.content?.map(c=>c.text||'').join('')||'';
+  const d = await resp.json();
+  if(d.error) throw new Error(d.error.message);
+  return d.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('')||'';
 }
 
 async function analyzeError(id){
   const e=errors.find(x=>x.id===id); if(!e)return;
+  if(!GEMINI_KEY){
+    const area=document.getElementById('analysisArea');
+    if(area)area.innerHTML=`<div class="aicard" style="text-align:center;color:#b2bec3;padding:18px">💡 填写免费 Gemini Key 后可获得 AI 错因分析<br><small style="color:#a29bfe"><a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#a29bfe">免费获取 →</a>　点「切换」重新登录填写</small></div>`;
+    return;
+  }
   const tb={math:settings.math,chinese:settings.chinese,english:settings.english}[e.subject];
   const prompt=`你是专门帮助小学生的AI，请用温暖鼓励、简单易懂语言（适合8-12岁）分析错题。\n\n科目：${SM[e.subject]} 教材：${e.textbook}\n题目：${e.question}\n学生答案：${e.wrongAnswer||'未填写'} 正确答案：${e.correctAnswer||'未填写'}\n\n请用HTML（只用<br>和<span class="hl">重点</span>）回复：\n1. 鼓励语（1句）\n2. 结合${tb}教材分析原因（2-3点，✦开头）\n3. 记忆技巧（🌈开头）\n4. 加油语\n\n简洁有趣，不超过180字。`;
   // Use cloud URL for AI if available, otherwise base64
@@ -1006,6 +1055,11 @@ async function analyzeError(id){
 async function genPractice(id){
   const e=errors.find(x=>x.id===id); if(!e)return;
   const btn=document.getElementById('genBtn'),area=document.getElementById('practiceArea');
+  if(!GEMINI_KEY){
+    if(area)area.innerHTML=`<div style="text-align:center;color:#b2bec3;padding:18px;font-size:.82rem">💡 填写免费 Gemini Key 后可生成同步教材练习题<br><a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#a29bfe;font-weight:800;">免费获取 →</a></div>`;
+    if(btn)btn.disabled=true;
+    return;
+  }
   if(btn)btn.disabled=true; if(area)area.innerHTML='<div class="ldots"><span></span><span></span><span></span></div>';
   const tb={math:settings.math,chinese:settings.chinese,english:settings.english}[e.subject];
   const u={math:settings.mathU,chinese:settings.chineseU,english:settings.englishU}[e.subject];
@@ -1169,6 +1223,10 @@ function renderReportHistory(){
 }
 async function generateAIReport(){
   const btn=document.getElementById('genReportBtn'),area=document.getElementById('aiReportArea');
+  if(!GEMINI_KEY){
+    if(area)area.innerHTML=`<div class="ai-report-card" style="text-align:center;color:#b2bec3;padding:24px">💡 填写免费 Gemini Key 后可生成 AI 学情报告<br><a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#a29bfe;font-weight:800;margin-top:8px;display:inline-block;">免费获取 Gemini Key →</a><br><small style="color:#dfe6e9;margin-top:6px;display:block;">点右上角「切换」重新登录填写</small></div>`;
+    return;
+  }
   if(btn)btn.disabled=true;
   if(area)area.innerHTML=`<div class="ai-report-card"><div class="ldots"><span></span><span></span><span></span></div><div style="text-align:center;color:#a29bfe;font-size:.82rem;padding-bottom:10px">AI正在分析学习情况...</div></div>`;
   const fe=getFiltered(),subj=v('rpFilter'),days=v('rpTime');
