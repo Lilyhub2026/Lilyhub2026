@@ -832,7 +832,6 @@ async function runOCR(b64){
     toast('⚠️ 识别失败，请手动输入题目内容');
   }
 }
-}
 async function submitPhoto(){
   const q=(document.getElementById('ocrText')?.value||'').trim()||'（图片题目）';
   if(!q&&!pendingPhoto){alert('请先上传图片！');return;}
