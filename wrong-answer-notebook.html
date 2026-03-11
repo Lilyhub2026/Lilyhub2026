@@ -826,55 +826,63 @@ function compressImage(base64, maxPx=1200, quality=0.82){
   });
 }
 async function runOCR(b64){
-  const ob=document.getElementById('ocrBar'),ox=document.getElementById('ocrBox'),ot=document.getElementById('ocrText');
+  const ob=document.getElementById('ocrBar'),ox=document.getElementById('ocrBox'),ot=document.getElementById('ocrText'),fw=document.getElementById('fW');
   if(ob)ob.style.display='flex';
-  if(ob)ob.innerHTML='<div style="display:flex;align-items:center;gap:8px"><div class="ldots" style="padding:0"><span></span><span></span><span></span></div>正在加载识别引擎...</div>';
   if(ox)ox.style.display='none';
+
+  // 优先用 Gemini（准确率高），没有 Key 则用 Tesseract（免费）
+  if(GEMINI_KEY){
+    try{
+      if(ob)ob.innerHTML='<div style="display:flex;align-items:center;gap:8px"><div class="ldots" style="padding:0"><span></span><span></span><span></span></div>Gemini AI 识别中...</div>';
+      const mime=b64.split(';')[0].split(':')[1]||'image/jpeg';
+      const data=b64.split(',')[1];
+      const txt=await apiCall([
+        {type:'image',source:{type:'base64',media_type:mime,data}},
+        {type:'text',text:`请识别图片中的题目内容，按以下格式输出纯文本：\n【题目】\n（题目原文，完整抄写）\n\n【学生答案】\n（学生写的答案，没有则写"无"）`}
+      ]);
+      const qm=txt.match(/【题目】\s*([\s\S]*?)(?=【|$)/),am=txt.match(/【学生答案】\s*([\s\S]*?)$/);
+      if(ob)ob.style.display='none'; if(ox)ox.style.display='block';
+      if(ot)ot.value=qm?qm[1].trim():txt.trim();
+      if(am&&fw&&am[1].trim()!=='无'&&am[1].trim())fw.value=am[1].trim();
+      toast('✅ Gemini 识别完成，请检查内容');
+      return;
+    }catch(e){
+      console.error('Gemini OCR failed, falling back to Tesseract:', e);
+    }
+  }
+
+  // 降级：Tesseract 本地识别
   try{
-    // Load Tesseract.js with fallback CDNs
+    if(ob)ob.innerHTML='<div style="display:flex;align-items:center;gap:8px"><div class="ldots" style="padding:0"><span></span><span></span><span></span></div>本地识别中（填写 Gemini Key 可提升准确率）...</div>';
     if(typeof Tesseract === 'undefined'){
-      const cdns=[
-        'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
-        'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'
-      ];
+      const cdns=['https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js','https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'];
       let loaded=false;
       for(const cdn of cdns){
         try{
-          await new Promise((res,rej)=>{
-            const s=document.createElement('script');
-            s.src=cdn;
-            s.onload=()=>{loaded=true;res();};
-            s.onerror=rej;
-            s.timeout=15000;
-            document.head.appendChild(s);
-          });
+          await new Promise((res,rej)=>{const s=document.createElement('script');s.src=cdn;s.onload=()=>{loaded=true;res();};s.onerror=rej;document.head.appendChild(s);});
           if(loaded) break;
-        }catch(e){ console.warn('CDN failed:',cdn); }
+        }catch(e){console.warn('CDN failed:',cdn);}
       }
-      if(!loaded) throw new Error('Tesseract 加载失败，请检查网络后重试');
+      if(!loaded) throw new Error('识别引擎加载失败，请检查网络');
     }
-
-    if(ob)ob.innerHTML='<div style="display:flex;align-items:center;gap:8px"><div class="ldots" style="padding:0"><span></span><span></span><span></span></div>正在识别文字，请稍候（首次约20秒）...</div>';
-
     const result = await Tesseract.recognize(b64, 'chi_sim+eng', {
       logger: m => {
-        if(m.status==='recognizing text' && ob){
+        if(m.status==='recognizing text'&&ob){
           ob.innerHTML=`<div style="display:flex;align-items:center;gap:8px"><div class="ldots" style="padding:0"><span></span><span></span><span></span></div>识别中 ${Math.round(m.progress*100)}%...</div>`;
         }
       }
     });
-
-    const text = result.data.text.trim();
+    const text=result.data.text.trim();
     if(ob)ob.style.display='none';
     if(ox)ox.style.display='block';
-    if(ot)ot.value = text || '未能识别文字，请手动输入';
+    if(ot)ot.value=text||'未能识别文字，请手动输入';
     if(text) toast('✅ 识别完成，请检查内容是否正确');
   }catch(e){
-    console.error('OCR error:',e);
+    console.error('Tesseract error:',e);
     if(ob)ob.style.display='none';
     if(ox)ox.style.display='block';
     if(ot)ot.value='';
-    toast('⚠️ ' + (e.message||'识别失败') + '，请手动输入题目内容');
+    toast('⚠️ '+(e.message||'识别失败')+'，请手动输入题目内容');
   }
 }
 async function submitPhoto(){
