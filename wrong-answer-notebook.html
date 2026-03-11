@@ -828,19 +828,33 @@ function compressImage(base64, maxPx=1200, quality=0.82){
 async function runOCR(b64){
   const ob=document.getElementById('ocrBar'),ox=document.getElementById('ocrBox'),ot=document.getElementById('ocrText');
   if(ob)ob.style.display='flex';
+  if(ob)ob.innerHTML='<div style="display:flex;align-items:center;gap:8px"><div class="ldots" style="padding:0"><span></span><span></span><span></span></div>正在加载识别引擎...</div>';
   if(ox)ox.style.display='none';
   try{
-    // Load Tesseract.js if not already loaded
+    // Load Tesseract.js with fallback CDNs
     if(typeof Tesseract === 'undefined'){
-      await new Promise((res,rej)=>{
-        const s=document.createElement('script');
-        s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-        s.onload=res; s.onerror=rej;
-        document.head.appendChild(s);
-      });
+      const cdns=[
+        'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
+        'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'
+      ];
+      let loaded=false;
+      for(const cdn of cdns){
+        try{
+          await new Promise((res,rej)=>{
+            const s=document.createElement('script');
+            s.src=cdn;
+            s.onload=()=>{loaded=true;res();};
+            s.onerror=rej;
+            s.timeout=15000;
+            document.head.appendChild(s);
+          });
+          if(loaded) break;
+        }catch(e){ console.warn('CDN failed:',cdn); }
+      }
+      if(!loaded) throw new Error('Tesseract 加载失败，请检查网络后重试');
     }
-    // Update bar text
-    if(ob)ob.innerHTML='<div style="display:flex;align-items:center;gap:8px"><div class="ldots" style="padding:0"><span></span><span></span><span></span></div>正在识别文字，请稍候...</div>';
+
+    if(ob)ob.innerHTML='<div style="display:flex;align-items:center;gap:8px"><div class="ldots" style="padding:0"><span></span><span></span><span></span></div>正在识别文字，请稍候（首次约20秒）...</div>';
 
     const result = await Tesseract.recognize(b64, 'chi_sim+eng', {
       logger: m => {
@@ -854,12 +868,13 @@ async function runOCR(b64){
     if(ob)ob.style.display='none';
     if(ox)ox.style.display='block';
     if(ot)ot.value = text || '未能识别文字，请手动输入';
+    if(text) toast('✅ 识别完成，请检查内容是否正确');
   }catch(e){
     console.error('OCR error:',e);
     if(ob)ob.style.display='none';
     if(ox)ox.style.display='block';
     if(ot)ot.value='';
-    toast('⚠️ 识别失败，请手动输入题目内容');
+    toast('⚠️ ' + (e.message||'识别失败') + '，请手动输入题目内容');
   }
 }
 async function submitPhoto(){
